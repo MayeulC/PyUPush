@@ -23,6 +23,8 @@ import http.server
 import time
 import random
 import string
+import json
+import codecs
 
 
 # TODO:
@@ -63,6 +65,7 @@ class PyUPushHTTPHandler(http.server.BaseHTTPRequestHandler):
 
     # API paths:
     clientPath = "/client/id/"
+    clientPathMultiple = "/client/multi_id/"
     registerPath = "/client/register"
     pusherPath = "/push/id/"
 
@@ -89,6 +92,48 @@ class PyUPushHTTPHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(message.content)
         self.wfile.write(b'\n\n')  # Seems to allow pushing the message out
     
+    def __clientapi_multiple(self, path):
+        keys_str = path.split(self.clientPathMultiple)[1]
+        keys = keys_str.split("&")
+        keyError = []
+        clients = []
+        for key in keys:
+            client = db.get_record(key)
+            if client is None:
+                keyError.append(key)
+            else:
+                clients.append(client)
+        if len(keyError) > 0:  # Some keys are invalid
+            self.errInvalidKeys(keyError)
+            return
+        # TODO: mutex, timeout, TCP keepalive
+        self.send_response(200)
+        self.send_header('Content-type', 'text/json')
+        self.send_header('Connection', 'keep-alive')
+        self.end_headers()
+        while True:
+            # The idea is to regularly check if there is anything to send.
+            # If there is, construct a dictionary that can be json-serialized
+            # Format is something similar to:
+            # {id1: [message1_base64, msg2_b64,...], id2: [msg1_b64,...]}
+            sendList = {}
+            for client in clients:
+                client.last_listened = time.time()
+                if len(client.msgList) > 0:
+                    # TODO: support multiple push items for same client
+                    sendList[client.id] = []
+                    for msg in client.msgList:
+                        sendList[client.id].append(
+                                codecs.encode(
+                                    msg.content, 'base64').decode('ascii'))
+                        # JSON encoder needs strings
+                    del client.msgList[:]  # TODO: race condition if no mutex
+            if len(sendList) > 0:
+                js = json.dumps(sendList).encode()
+                self.wfile.write(js)
+                self.wfile.write(b'\r\n')
+            time.sleep(1)  # Use less CPU while waiting for new events
+
     def __clientapi(self, path):
         key = path.split(self.clientPath)[1]
         client = db.get_record(key)
@@ -136,6 +181,8 @@ class PyUPushHTTPHandler(http.server.BaseHTTPRequestHandler):
             self.__up_discovery(self.path)
         elif self.path.startswith(self.clientPath):
             self.__clientapi(self.path)
+        elif self.path.startswith(self.clientPathMultiple):
+            self.__clientapi_multiple(self.path)
         elif self.path == self.registerPath:
             self.__clientRegister()
         else:

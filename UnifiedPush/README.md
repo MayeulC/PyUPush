@@ -30,6 +30,11 @@ $ curl -v "http://127.0.0.1:8976/push/id/WQVOXKBGG" -d "Example payload"
 * Listen to push messages for that id:
   * `HTTP GET /client/id/WQVOXKBGG`
   * The connection remains open while the client listens
+* Listen to multiple ids:
+  * `HTTP GET /client/multi_id/AAAAAAAA&BBBBBBB&WQVOXKBGG
+  * The connection remains open while the client listens
+  * Response: `{"AAAAAAAA": "base64-encoded data here"}`
+    * Multiple ids can be present in the same json response
 
 <details><summary>Example from curl</summary>
 
