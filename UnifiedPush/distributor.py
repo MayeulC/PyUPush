@@ -76,7 +76,12 @@ class Server():
         self.__listen()
 
     def __messages_from_line(self, line: bytes):
-        j = json.loads(line)
+        print(f"received line: {line}")
+        try:
+            j = json.loads(line)
+        except json.decoder.JSONDecodeError:
+            print('***Attention***')
+            return []  # Did not receive the entire line
         messages = []
         for key in j:
             if not isinstance(key, str):
@@ -84,7 +89,7 @@ class Server():
                 continue
             id = ServerID(key)
             for b64message in j[key]:
-                data = codecs.decode(b64message, 'base64')
+                data = codecs.decode(b64message.encode('ascii'), 'base64')
                 message = UPMessage(id, data)
                 messages.append(message)
         return messages
@@ -105,9 +110,7 @@ class Server():
                 # time.sleep(0.1)
                 if line:  # TODO: check that this catches keepalives
                     messages = self.__messages_from_line(line)
-                    # decoded = codecs.decode(line, 'base64')
-                    # bus.send_message(sn, decoded)
-                    bus.send_messages(messages)
+                    self.dbus.send_messages(messages)
 
     def stop_listening(self):
         self.stop_listening_flag = True
@@ -207,6 +210,7 @@ class DBus():
             if not status:
                 return (failure, "failed to save info")
             self.dbus.send_new_endpoint(sn, tk, server.id_to_endpoint(new_id))  # TODO can MAYBE cause deadlocks?
+            server.update_listening(registrationDB.id_set())
             return (success, "successfully registered")
 
         def Unregister(self, token: str):
@@ -221,6 +225,7 @@ class DBus():
                 unregistered = server.unregister(registrationDB.get_id(tk))
                 if unregistered:
                     registrationDB.remove(tk)
+                    server.update_listening(registrationDB.id_set())
             self.dbus.tell_unregistered(registrationDB.get_serviceName(tk),  # TODO SPEC issue: if not registered, how can I know the service name?
                                         tk, unregistered)
             return
@@ -228,6 +233,7 @@ class DBus():
     def __init__(self):
         session_bus = pydbus.SessionBus()
         # system_bus = pydbus.SystemBus() # TODO: try to register on system bus
+        server.dbus = self  # FIXME that's a HACK
         self.bus = session_bus
 
         self.loop = GLib.MainLoop()
@@ -247,8 +253,17 @@ class DBus():
 
     def send_message(self, message: UPMessage):
         tk = registrationDB.get_token(message.id)
+        if tk is None:
+            return  # was probably removed earlier during the sending sequence
         sn = registrationDB.get_serviceName(tk)
-        con = self.get_connector(sn)
+        try:
+            con = self.get_connector(sn)
+        except GLib.GError:  # TODO: better error handling, this is g-dbus-error-quark: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown
+            print(f"could not find the receiver, unregistering token for id {message.id}")
+            server.unregister(message.id)
+            registrationDB.remove(tk)
+            return
+        print(f"{tk} -- sending message '{message.data}' to {sn}")
         con.Message(tk, message.data, "")
 
     def send_new_endpoint(self, sn: ServiceName, token: Token, endpoint: str):
@@ -289,7 +304,7 @@ class RegistrationDB():
         return True
 
     def id_set(self):
-        return set(client.id for client in self.db)
+        return set(client.id for client in self.db.values())
 
     def token_list(self):
         return list(tk for tk in self.db)
