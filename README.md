@@ -23,4 +23,12 @@ See [UnifiedPush/](UnifiedPush/) for the UnifiedPush-specific part ("*distributo
 If you want to develop or refine a distributor, you will probably be more interested in the first, if you want to integrate UP in your application, have a look at the second.
 As an app developer, libraries exist to make implementing UnifiedPush easier, see [this existing Go and C api](https://unifiedpush.org/developers/go_c/).
 
-
+## TODO
+* Bug fixes, especially lock-ups, exception handling
+* Support unregistration
+* Add more fully-fledged example that directly send a call to /push
+* Add client and server-side application
+* Rewrite API to better separate the logical parts, currently it relies a lot on globals and most classes calling into most others due to last-minute hacks
+* Separate the API into its own files? Not sure if that goes against the goals.
+* Usage documentation
+* Unit testing, probably one of the most useful features that could come out of this project
