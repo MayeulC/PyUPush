@@ -5,7 +5,6 @@ import threading
 import time
 import pydbus
 from gi.repository import GLib
-from pydbus.generic import signal
 import requests
 
 server_url = "http://127.0.0.1:8976"
@@ -180,6 +179,9 @@ class DBus():
           </interface>
         </node>
         """
+        def __init__(self, dbus: 'DBus'):
+            self.dbus = dbus  # TODO: get rid of this, that's not very clean
+
         def Register(self, serviceName: str, token: str, description: str):
             """UnifiedPush-specified register D-Bus method.
             Calls into the implementation-specific server registration code,
@@ -204,7 +206,7 @@ class DBus():
             status = registrationDB.insert(tk, new_id, sn, description)
             if not status:
                 return (failure, "failed to save info")
-            bus.send_new_endpoint(sn, tk, server.id_to_endpoint(new_id))  # TODO can MAYBE cause deadlocks?
+            self.dbus.send_new_endpoint(sn, tk, server.id_to_endpoint(new_id))  # TODO can MAYBE cause deadlocks?
             return (success, "successfully registered")
 
         def Unregister(self, token: str):
@@ -219,8 +221,8 @@ class DBus():
                 unregistered = server.unregister(registrationDB.get_id(tk))
                 if unregistered:
                     registrationDB.remove(tk)
-            bus.tell_unregistered(registrationDB.get_serviceName(tk),  # TODO SPEC issue: if not registered, how can I know the service name?
-                                  tk, unregistered)
+            self.dbus.tell_unregistered(registrationDB.get_serviceName(tk),  # TODO SPEC issue: if not registered, how can I know the service name?
+                                        tk, unregistered)
             return
 
     def __init__(self):
@@ -230,7 +232,7 @@ class DBus():
 
         self.loop = GLib.MainLoop()
         self.bus.publish("org.unifiedpush.Distributor.PyUPush", self.PyUPush(),
-                         ("/org/unifiedpush/Distributor", self.Distributor()))
+                         ("/org/unifiedpush/Distributor", self.Distributor(self)))
         self.loop.run()
 
     def stop(self):
@@ -247,17 +249,17 @@ class DBus():
         tk = registrationDB.get_token(message.id)
         sn = registrationDB.get_serviceName(tk)
         con = self.get_connector(sn)
-        con.org.unifiedpush.Connector1.Message(tk, message.data, "")
+        con.Message(tk, message.data, "")
 
     def send_new_endpoint(self, sn: ServiceName, token: Token, endpoint: str):
         con = self.get_connector(sn)
-        con.org.unifiedpush.Connector1.NewEndpoint(token, endpoint)
+        con.NewEndpoint(token, endpoint)
 
     def tell_unregistered(self, sn: ServiceName, token: Token, status: bool):
         con = self.get_connector(sn)
         if status is True:
             token = Token("")
-        con.org.unifiedpush.Connector1.Unregistered(token)
+        con.Unregistered(token)
 
 
 class RegistrationDB():
