@@ -23,6 +23,14 @@ See [UnifiedPush/](UnifiedPush/) for the UnifiedPush-specific part ("*distributo
 If you want to develop or refine a distributor, you will probably be more interested in the first, if you want to integrate UP in your application, have a look at the second.
 As an app developer, libraries exist to make implementing UnifiedPush easier, see [this existing Go and C api](https://unifiedpush.org/developers/go_c/).
 
+### Usage
+1. Run the server-side distributor from [UnifiedPush/server.py](UnifiedPush/server.py)
+2. Run the client-side distributor from [UnifiedPush/server.py](UnifiedPush/distributor.py)
+3. Run the client application from [Application/UpConnector.py](UnifiedPush/UpConnector.py)
+4. Observe the endpoint returned from the client application, and send it some data with `curl -d 'some_data' 'http://endpoint'`
+
+Python scripts can be ran with `python script.py`
+
 ## TODO
 * Bug fixes, especially lock-ups, exception handling
 * Support unregistration
