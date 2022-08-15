@@ -89,4 +89,8 @@ Example with yet another payload
 
 </details>
 
+## Distributor
 
+The distributor implements the [UnifiedPush D-Bus specification](https://unifiedpush.org/spec/dbus/) v0.3.0.
+
+It is largely untested for now.
